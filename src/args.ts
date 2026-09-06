@@ -26,6 +26,8 @@ Options:
   -h, --help            Show this help
 
 In a TTY, progress uses a compact spinner. Press ctrl+e to expand logs.
+If .env or .env.* files are present, you can append SLACK_XOXD, SLACK_TEAM_XOXC,
+and SLACK_ENTERPRISE_XOXC without overwriting existing values.
 `);
 }
 
