@@ -1,0 +1,31 @@
+{
+  "name": "hc-slack-auth",
+  "version": "1.0.0",
+  "description": "CLI to sign into Hack Club Auth and print Slack xoxc/xoxd tokens",
+  "type": "module",
+  "bin": {
+    "hc-slack-auth": "./dist/index.js"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "hackclub",
+    "slack",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "tough-cookie": "^6.0.2",
+    "undici": "^8.10.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
