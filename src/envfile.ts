@@ -30,6 +30,7 @@ export type EnvUpdatePlan = {
   blocked: Array<{ key: string; reason: string }>;
   duplicateKeys: string[];
   warnings: string[];
+  isNew: boolean;
 };
 
 export async function findEnvFiles(cwd = process.cwd()): Promise<string[]> {
@@ -181,6 +182,7 @@ export function planEnvUpdate(file: string, original: string, vars: SlackEnvVars
     blocked,
     duplicateKeys: duplicates,
     warnings,
+    isNew: false,
   };
 }
 

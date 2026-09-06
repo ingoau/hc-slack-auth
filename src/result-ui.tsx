@@ -19,6 +19,7 @@ import {
 } from "./extract.js";
 import {
   applyEnvUpdate,
+  defaultEnvFile,
   displayName,
   envConfirmText,
   findEnvFiles,
@@ -146,7 +147,7 @@ function ResultApp({
         }
         const files = await findEnvFiles();
         if (files.length === 0) {
-          showTokens("No .env file found in this directory.");
+          await openConfirm(defaultEnvFile(), vars, warnings);
           return;
         }
         if (files.length === 1) {
@@ -300,7 +301,7 @@ function ResultApp({
     busy.current = true;
     try {
       await applyEnvUpdate(plan);
-      showTokens(wroteMessage(plan.file, plan.added.map((item) => item.key)));
+      showTokens(wroteMessage(plan));
     } catch (error: unknown) {
       const text = error instanceof Error ? error.message : String(error);
       showTokens(`Could not update env file: ${text}`);
@@ -332,7 +333,11 @@ function ResultApp({
     const extra = maskSecretsInText(envConfirmText(view.plan));
     return (
       <Box flexDirection="column" paddingLeft={1} marginY={1}>
-        <Text bold>Apply changes to {displayName(view.plan.file)}?</Text>
+        <Text bold>
+          {view.plan.isNew
+            ? `Create a new ${displayName(view.plan.file)} file?`
+            : `Apply changes to ${displayName(view.plan.file)}?`}
+        </Text>
         {extra.split("\n").map((line, i) => {
           const isAdd = line.startsWith("+") && !line.startsWith("+++");
           const isDel = line.startsWith("-") && !line.startsWith("---");
