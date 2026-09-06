@@ -1,5 +1,6 @@
 import { Cookie, CookieJar } from "tough-cookie";
 import { request as undiciRequest } from "undici";
+import { log } from "./ui.js";
 
 export const AUTH_ORIGIN = "https://auth.hackclub.com";
 
@@ -161,8 +162,10 @@ export class HttpSession {
     });
 
     const stored = await this.ingestCookies(url, headerList(rawHeaders["set-cookie"]));
+    const parsed = new URL(url);
+    log(`${method} ${parsed.host}${parsed.pathname} → ${statusCode}`);
     if (stored.length) {
-      process.stderr.write(`Set-Cookie ${new URL(url).host}: ${stored.join(",")}\n`);
+      log(`cookies ${parsed.host}: ${stored.join(",")}`);
     }
 
     const responseHeaders = new Headers();

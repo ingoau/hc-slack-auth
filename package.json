@@ -11,7 +11,7 @@
     "build": "tsc"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "keywords": [
     "hackclub",
@@ -20,11 +20,14 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "ink": "^7.1.1",
+    "react": "^19.2.8",
     "tough-cookie": "^6.0.2",
     "undici": "^8.10.2"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }

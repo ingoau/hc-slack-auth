@@ -24,6 +24,8 @@ Options:
   --json                Print tokens as JSON
   --timeout <seconds>   Request timeout (default: 90)
   -h, --help            Show this help
+
+In a TTY, progress uses a compact spinner. Press ctrl+e to expand logs.
 `);
 }
 

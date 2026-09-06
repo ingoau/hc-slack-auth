@@ -17,6 +17,7 @@ import {
   mergeCredentials,
   type SlackCredentials,
 } from "./extract.js";
+import { log, status } from "./ui.js";
 
 const SLACK_AUTH_URLS = [
   "https://app.slack.com/auth?app=client",
@@ -59,15 +60,15 @@ async function applyDecodedCookies(
 ): Promise<string | null> {
   const decoded = decodeRehydrateArgs(args);
   if (decoded.encoding !== "opaque") {
-    process.stderr.write(`SSO args decoded as ${decoded.encoding}\n`);
+    log(`SSO args decoded as ${decoded.encoding}`);
     if (decoded.value && typeof decoded.value === "object") {
       const keys = Object.keys(decoded.value as object).slice(0, 12);
-      if (keys.length) process.stderr.write(`SSO args keys: ${keys.join(",")}\n`);
+      if (keys.length) log(`SSO args keys: ${keys.join(",")}`);
     }
   }
 
   for (const cookie of cookiesFromDecodedArgs(decoded.value)) {
-    process.stderr.write(`SSO JS set cookie ${cookie.name} (${cookie.value.length} chars)\n`);
+    log(`SSO JS set cookie ${cookie.name} (${cookie.value.length} chars)`);
     await session.setSlackCookie(cookie.name, cookie.value);
   }
 
@@ -90,14 +91,14 @@ async function rehydrateAsBrowser(
   page: HttpResponse,
 ): Promise<HttpResponse> {
   const doc = parseSlackSsoDocument(page.body, page.url);
-  process.stderr.write(`Slack SSO JS: ${describeSsoDocument(doc)}\n`);
+  log(`Slack SSO JS: ${describeSsoDocument(doc)}`);
 
   let fromArgs: string | null = null;
   if (doc.rehydrate) {
     fromArgs = await applyDecodedCookies(session, doc.rehydrate.args, page.url);
     const xoxd = await session.cookieStartingWith("https://slack.com/", "d", "xoxd-");
     if (xoxd && fromArgs) {
-      process.stderr.write(`SSO JS redirect from args → ${new URL(fromArgs).origin}${new URL(fromArgs).pathname}\n`);
+      log(`SSO JS redirect from args → ${new URL(fromArgs).origin}${new URL(fromArgs).pathname}`);
       return session.follow(await session.get(fromArgs, page.url), page.url);
     }
   }
@@ -107,7 +108,7 @@ async function rehydrateAsBrowser(
     const fields = await withSlackCrumb(session, form.action, form.fields);
     let next = await session.follow(await session.post(form.action, fields, page.url), page.url);
     if (isPermissionDenied(next)) {
-      process.stderr.write("Rehydrate form POST was denied; trying JSON POST like Slack's XHR path…\n");
+      log("Rehydrate form POST was denied; trying JSON POST");
       next = await session.follow(
         await session.postJson(
           form.action,
@@ -120,7 +121,7 @@ async function rehydrateAsBrowser(
     if (isPermissionDenied(next)) {
       const noJs = new URL(form.action);
       noJs.searchParams.set("nojsmode", "1");
-      process.stderr.write("Rehydrate still denied; trying nojsmode GET…\n");
+      log("Rehydrate still denied; trying nojsmode GET");
       next = await session.follow(await session.get(noJs.toString(), page.url), page.url);
     }
     return next;
@@ -182,7 +183,7 @@ async function findXoxd(session: HttpSession): Promise<string | null> {
 }
 
 export async function slackSso(session: HttpSession): Promise<SlackCredentials> {
-  process.stderr.write("Launching Hack Club Slack via SAML…\n");
+  status("Launching Hack Club Slack via SAML…");
   for (const url of WARMUP_URLS) {
     await session.follow(await session.get(url));
   }
@@ -203,6 +204,7 @@ export async function slackSso(session: HttpSession): Promise<SlackCredentials> 
   });
 
   for (const url of SLACK_AUTH_URLS) {
+    status("Fetching Slack client tokens…");
     const authPage = await session.follow(await session.get(url, samlPage.url));
     creds = mergeCredentials(creds, extractTokensFromText(authPage.body), {
       xoxd: await findXoxd(session),

@@ -8,6 +8,7 @@ import {
   pathOf,
 } from "./html.js";
 import { digitsOnly, prompt } from "./prompt.js";
+import { log, status } from "./ui.js";
 
 function fingerprint(): string {
   return randomBytes(16).toString("hex");
@@ -40,7 +41,7 @@ export async function hackclubLogin(session: HttpSession, args: CliArgs): Promis
   let page = await loadLoginPage(session);
   const csrf = extractCsrfToken(page.body);
 
-  process.stderr.write(`Signing in as ${email}…\n`);
+  status(`Signing in as ${email}…`);
   page = await session.follow(
     await session.post(
       `${AUTH_ORIGIN}/login`,
@@ -62,13 +63,15 @@ export async function hackclubLogin(session: HttpSession, args: CliArgs): Promis
   }
 
   if (pathOf(page.url).includes("/webauthn")) {
-    process.stderr.write("Passkey is enabled; falling back to an email code…\n");
+    log("Passkey is enabled; falling back to an email code");
+    status("Skipping passkey, using email code…");
     page = await skipPasskey(session, page.url, page.body);
   }
 
   page = await completeFactors(session, page, args);
 
   if (pathOf(page.url) === "/" || pathOf(page.url) === "") {
+    status("Signed into Hack Club Auth");
     return;
   }
 
@@ -85,13 +88,15 @@ async function completeFactors(
   for (let attempt = 0; attempt < 6; attempt++) {
     const path = pathOf(page.url);
     const flash = extractFlashError(page.body);
-    if (flash) process.stderr.write(`${flash}\n`);
+    if (flash) log(flash);
 
     if (path === "/" || path === "") return page;
 
     if (path.includes("/totp")) {
+      status("Waiting for TOTP code");
       const code = digitsOnly(args.totp ?? (await prompt("TOTP code: ")));
       const csrf = extractCsrfToken(page.body);
+      status("Verifying TOTP…");
       page = await session.follow(
         await session.post(page.url, { authenticity_token: csrf, code, commit: "Verify →" }, page.url),
         page.url,
@@ -100,8 +105,10 @@ async function completeFactors(
     }
 
     if (path.includes("/backup_code")) {
+      status("Waiting for backup code");
       const code = args.backupCode ?? (await prompt("Backup code: "));
       const csrf = extractCsrfToken(page.body);
+      status("Verifying backup code…");
       page = await session.follow(
         await session.post(page.url, { authenticity_token: csrf, code }, page.url),
         page.url,
@@ -115,10 +122,12 @@ async function completeFactors(
     }
 
     if (/^\/login\/[^/]+(\/verify)?$/.test(path)) {
+      status("Waiting for email login code");
       const code = digitsOnly(args.code ?? (await prompt("Email login code: ")));
       const csrf = extractCsrfToken(page.body);
       const attemptUrl = page.url.replace(/\/verify\/?$/, "");
       const verifyUrl = `${attemptUrl.replace(/\/$/, "")}/verify`;
+      status("Verifying email code…");
       page = await session.follow(
         await session.post(
           verifyUrl,
