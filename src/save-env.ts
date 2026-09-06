@@ -15,13 +15,18 @@ export function displayName(file: string): string {
 }
 
 export function wroteMessage(plan: EnvUpdatePlan): string {
-  const keys = plan.added.map((item) => item.key).join(", ");
-  if (plan.isNew) return `Created ${displayName(plan.file)} and wrote ${keys}.`;
-  return `Wrote ${keys} to ${displayName(plan.file)}.`;
+  const name = displayName(plan.file);
+  const added = plan.added.map((item) => item.key);
+  const replaced = plan.replaced.map((item) => item.key);
+  if (plan.isNew) return `Created ${name} and wrote ${added.join(", ")}.`;
+  const parts: string[] = [];
+  if (added.length > 0) parts.push(`wrote ${added.join(", ")}`);
+  if (replaced.length > 0) parts.push(`replaced ${replaced.join(", ")}`);
+  return parts.length > 0 ? `${parts.join("; ")} in ${name}.` : `Updated ${name}.`;
 }
 
 export function maskSecretsInText(text: string): string {
-  return text.replace(/xox[cd]-[A-Za-z0-9-]+/g, (token) => maskSecret(token));
+  return text.replace(/xox[cd]-[^\s"']+/g, (token) => maskSecret(token));
 }
 
 export function nothingToWriteMessage(plan: EnvUpdatePlan): string {
@@ -40,12 +45,26 @@ export function envConfirmText(plan: EnvUpdatePlan): string {
       ? `warning: this will create a new file (${displayName(plan.file)}) in the current directory`
       : null,
     ...plan.warnings.map((line) => `warning: ${line}`),
+    ...plan.replaced.map((item) => `warning: ${item.key} already exists; will replace`),
     ...plan.alreadySet.map((key) => `${key} is already set; skipping`),
     ...plan.blocked.map((item) => `warning: ${item.key} ${item.reason}`),
     unifiedDiff(plan.file, plan.original, plan.next),
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+export function envConfirmTitle(plan: EnvUpdatePlan): string {
+  const name = displayName(plan.file);
+  if (plan.isNew) return `Create a new ${name} file?`;
+  if (plan.replaced.length > 0 && plan.added.length === 0) {
+    return `Replace ${plan.replaced.map((item) => item.key).join(", ")} in ${name}?`;
+  }
+  return `Apply changes to ${name}?`;
+}
+
+export function hasEnvChanges(plan: EnvUpdatePlan): boolean {
+  return plan.added.length > 0 || plan.replaced.length > 0;
 }
 
 function isEnoent(error: unknown): boolean {

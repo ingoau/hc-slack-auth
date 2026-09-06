@@ -13,6 +13,7 @@ import {
   ssoRedirectFromHtml,
 } from "./sso.js";
 import {
+  decodeSlackCookie,
   extractTokensFromText,
   mergeCredentials,
   type SlackCredentials,
@@ -175,9 +176,9 @@ async function followHtmlAndRedirects(
 async function findXoxd(session: HttpSession): Promise<string | null> {
   for (const url of COOKIE_URLS) {
     const value = await session.cookieStartingWith(url, "d", "xoxd-");
-    if (value) return value;
+    if (value) return decodeSlackCookie(value);
     const raw = await session.cookieValue(url, "d");
-    if (raw) return decodeURIComponent(raw);
+    if (raw) return decodeSlackCookie(raw);
   }
   return null;
 }

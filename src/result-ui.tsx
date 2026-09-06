@@ -22,7 +22,9 @@ import {
   defaultEnvFile,
   displayName,
   envConfirmText,
+  envConfirmTitle,
   findEnvFiles,
+  hasEnvChanges,
   maskSecretsInText,
   nothingToWriteMessage,
   planEnvWrite,
@@ -39,8 +41,44 @@ type View =
 function noticeColor(notice: string | null): "red" | "yellow" | "green" | undefined {
   if (!notice) return undefined;
   if (notice.startsWith("Could not")) return "red";
-  if (notice.startsWith("No ") || notice.startsWith("Nothing")) return "yellow";
+  if (
+    notice.startsWith("No ") ||
+    notice.startsWith("Nothing") ||
+    notice.includes("isn't saved")
+  ) {
+    return "yellow";
+  }
   return "green";
+}
+
+type ResultRow =
+  | { id: string; kind: "identity"; title: string; value: string; savable: false }
+  | { id: string; kind: "token"; title: string; value: string; savable: true; card: TokenCard };
+
+function resultRows(creds: SlackCredentials): ResultRow[] {
+  const identity = identityInfo(creds);
+  const rows: ResultRow[] = [];
+  for (const id of identity.userIds) {
+    rows.push({ id: `user-${id}`, kind: "identity", title: "user", value: id, savable: false });
+  }
+  if (identity.enterpriseId) {
+    rows.push({
+      id: `org-${identity.enterpriseId}`,
+      kind: "identity",
+      title: "org",
+      value: identity.enterpriseId,
+      savable: false,
+    });
+  }
+  for (const card of tokenCards(creds)) {
+    rows.push({ id: card.id, kind: "token", title: card.title, value: card.value, savable: true, card });
+  }
+  return rows;
+}
+
+function firstSavableIndex(rows: ResultRow[]): number {
+  const index = rows.findIndex((row) => row.savable);
+  return index >= 0 ? index : 0;
 }
 
 function envVarsForCard(card: TokenCard): SlackEnvVars | null {
@@ -95,13 +133,18 @@ function ResultApp({
   creds: SlackCredentials;
   onQuit: () => void;
 }): JSX.Element {
-  const identity = identityInfo(creds);
-  const cards = tokenCards(creds);
+  const rows = resultRows(creds);
+  const identityRows = rows.filter(
+    (row): row is Extract<ResultRow, { kind: "identity" }> => row.kind === "identity",
+  );
+  const tokenRows = rows.filter(
+    (row): row is Extract<ResultRow, { kind: "token" }> => row.kind === "token",
+  );
   const { columns } = useWindowSize();
   const width = Math.max(24, (columns || 80) - 2);
   const [view, setView] = useState<View>({ kind: "tokens" });
   const [revealed, setRevealed] = useState(false);
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(() => firstSavableIndex(rows));
   const [fileIndex, setFileIndex] = useState(0);
   const [confirmYes, setConfirmYes] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -109,13 +152,13 @@ function ResultApp({
   const selectedRef = useRef(selected);
   const fileIndexRef = useRef(fileIndex);
   const confirmYesRef = useRef(confirmYes);
-  const cardsRef = useRef(cards);
+  const rowsRef = useRef(rows);
   const busy = useRef(false);
   viewRef.current = view;
   selectedRef.current = selected;
   fileIndexRef.current = fileIndex;
   confirmYesRef.current = confirmYes;
-  cardsRef.current = cards;
+  rowsRef.current = rows;
 
   const showTokens = (message?: string) => {
     if (message !== undefined) setNotice(message);
@@ -128,11 +171,11 @@ function ResultApp({
     warnings: string[],
   ): Promise<void> => {
     const plan = await planEnvWrite(vars, warnings, file);
-    if (plan.added.length === 0) {
+    if (!hasEnvChanges(plan)) {
       showTokens(nothingToWriteMessage(plan));
       return;
     }
-    setConfirmYes(true);
+    setConfirmYes(plan.replaced.length === 0);
     setView({ kind: "confirm", plan });
   };
 
@@ -166,8 +209,16 @@ function ResultApp({
   };
 
   const saveSelected = () => {
-    const card = cardsRef.current[selectedRef.current];
-    const vars = card ? envVarsForCard(card) : null;
+    const row = rowsRef.current[selectedRef.current];
+    if (!row) {
+      setNotice("No tokens to save.");
+      return;
+    }
+    if (!row.savable) {
+      setNotice(`${row.title} isn't saved to env; press c to copy`);
+      return;
+    }
+    const vars = envVarsForCard(row.card);
     if (!vars) {
       setNotice("Don't know which env var to use for this token.");
       return;
@@ -181,13 +232,13 @@ function ResultApp({
   };
 
   const copySelected = () => {
-    const card = cardsRef.current[selectedRef.current];
-    if (!card) {
-      setNotice("No tokens to copy.");
+    const row = rowsRef.current[selectedRef.current];
+    if (!row) {
+      setNotice("Nothing to copy.");
       return;
     }
-    void copyToClipboard(card.value)
-      .then(() => setNotice(`Copied ${card.title} to the clipboard.`))
+    void copyToClipboard(row.value)
+      .then(() => setNotice(`Copied ${row.title} to the clipboard.`))
       .catch((error: unknown) => {
         const text = error instanceof Error ? error.message : String(error);
         setNotice(`Could not copy to the clipboard: ${text}`);
@@ -262,13 +313,13 @@ function ResultApp({
     }
 
     if (key.upArrow || input === "k") {
-      if (cardsRef.current.length === 0) return;
-      setSelected((index) => (index + cardsRef.current.length - 1) % cardsRef.current.length);
+      if (rowsRef.current.length === 0) return;
+      setSelected((index) => (index + rowsRef.current.length - 1) % rowsRef.current.length);
       return;
     }
     if (key.downArrow || input === "j") {
-      if (cardsRef.current.length === 0) return;
-      setSelected((index) => (index + 1) % cardsRef.current.length);
+      if (rowsRef.current.length === 0) return;
+      setSelected((index) => (index + 1) % rowsRef.current.length);
       return;
     }
     if (input === "v") {
@@ -333,11 +384,7 @@ function ResultApp({
     const extra = maskSecretsInText(envConfirmText(view.plan));
     return (
       <Box flexDirection="column" paddingLeft={1} marginY={1}>
-        <Text bold>
-          {view.plan.isNew
-            ? `Create a new ${displayName(view.plan.file)} file?`
-            : `Apply changes to ${displayName(view.plan.file)}?`}
-        </Text>
+        <Text bold>{envConfirmTitle(view.plan)}</Text>
         {extra.split("\n").map((line, i) => {
           const isAdd = line.startsWith("+") && !line.startsWith("+++");
           const isDel = line.startsWith("-") && !line.startsWith("---");
@@ -364,30 +411,36 @@ function ResultApp({
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginY={1} gap={1}>
-      <Box flexDirection="column">
-        {identity.userIds.map((id) => (
-          <Text key={id} wrap="truncate">
-            user  {id}
-          </Text>
-        ))}
-        {identity.enterpriseId ? (
-          <Text dimColor wrap="truncate">
-            org   {identity.enterpriseId}
-          </Text>
-        ) : null}
-      </Box>
+      {identityRows.length > 0 ? (
+        <Box flexDirection="column">
+          {identityRows.map((row) => {
+            const isSelected = rows[selected]?.id === row.id;
+            return (
+              <Text
+                key={row.id}
+                color={isSelected ? "cyan" : undefined}
+                dimColor={!isSelected && row.title === "org"}
+                wrap="truncate"
+              >
+                {isSelected ? "❯ " : "  "}
+                {row.title.padEnd(4)}  {row.value}
+              </Text>
+            );
+          })}
+        </Box>
+      ) : null}
 
       <Text bold>Slack tokens</Text>
 
-      {cards.map((card, index) => {
-        const isSelected = index === selected;
-        const shown = revealed ? card.value : maskSecret(card.value);
+      {tokenRows.map((row) => {
+        const isSelected = rows[selected]?.id === row.id;
+        const shown = revealed ? row.value : maskSecret(row.value);
         return (
-          <Card key={card.id} title={card.title} selected={isSelected} width={width}>
+          <Card key={row.id} title={row.card.title} selected={isSelected} width={width}>
             <Text wrap={revealed ? "wrap" : "truncate"} color={isSelected ? "cyan" : undefined}>
               {shown}
             </Text>
-            {card.details.map((detail) => (
+            {row.card.details.map((detail) => (
               <Text key={detail.label} dimColor wrap="truncate">
                 {detail.label}  {detail.value}
               </Text>

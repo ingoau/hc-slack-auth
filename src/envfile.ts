@@ -26,6 +26,7 @@ export type EnvUpdatePlan = {
   original: string;
   next: string;
   added: Array<{ key: string; value: string }>;
+  replaced: Array<{ key: string; from: string; to: string; line: number }>;
   alreadySet: string[];
   blocked: Array<{ key: string; reason: string }>;
   duplicateKeys: string[];
@@ -138,6 +139,7 @@ export function planEnvUpdate(file: string, original: string, vars: SlackEnvVars
 
   const warnings = [...extraWarnings];
   const added: Array<{ key: string; value: string }> = [];
+  const replaced: Array<{ key: string; from: string; to: string; line: number }> = [];
   const alreadySet: string[] = [];
   const blocked: Array<{ key: string; reason: string }> = [];
 
@@ -157,8 +159,12 @@ export function planEnvUpdate(file: string, original: string, vars: SlackEnvVars
       if (existing[0]!.value === incoming) {
         alreadySet.push(key);
       } else {
-        blocked.push({ key, reason: "already set to a different value" });
-        warnings.push(`${key} already exists; not overwriting.`);
+        replaced.push({
+          key,
+          from: existing[0]!.value,
+          to: incoming,
+          line: existing[0]!.line,
+        });
       }
       continue;
     }
@@ -166,8 +172,11 @@ export function planEnvUpdate(file: string, original: string, vars: SlackEnvVars
   }
 
   let next = original;
+  for (const item of replaced) {
+    next = rewriteEnvAssignment(next, item.line, item.key, item.to);
+  }
   if (added.length > 0) {
-    const body = original.endsWith("\n") || original.length === 0 ? original : `${original}\n`;
+    const body = next.endsWith("\n") || next.length === 0 ? next : `${next}\n`;
     const prefix = body.length === 0 || body.endsWith("\n\n") ? "" : "\n";
     const lines = added.map(({ key, value }) => `${key}=${quoteEnvValue(value)}`).join("\n");
     next = `${body}${prefix}${lines}\n`;
@@ -178,12 +187,25 @@ export function planEnvUpdate(file: string, original: string, vars: SlackEnvVars
     original,
     next,
     added,
+    replaced,
     alreadySet,
     blocked,
     duplicateKeys: duplicates,
     warnings,
     isNew: false,
   };
+}
+
+function rewriteEnvAssignment(source: string, lineNumber: number, key: string, value: string): string {
+  const nl = source.includes("\r\n") ? "\r\n" : "\n";
+  const endedWithNl = source.endsWith("\n");
+  const lines = source.split(/\r?\n/);
+  if (endedWithNl && lines.at(-1) === "") lines.pop();
+  const idx = lineNumber - 1;
+  const raw = lines[idx] ?? "";
+  const prefix = raw.match(/^\s*(?:export\s+)?/)?.[0] ?? "";
+  lines[idx] = `${prefix}${key}=${quoteEnvValue(value)}`;
+  return endedWithNl ? `${lines.join(nl)}\n` : lines.join(nl);
 }
 
 function splitLines(source: string): string[] {
