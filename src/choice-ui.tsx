@@ -34,11 +34,11 @@ function ChoiceList<T>({
 
   useInput((input, key) => {
     if (done.current) return;
-    if (key.upArrow) {
+    if (key.upArrow || input === "k") {
       setIndex((current) => (current + options.length - 1) % options.length);
       return;
     }
-    if (key.downArrow) {
+    if (key.downArrow || input === "j") {
       setIndex((current) => (current + 1) % options.length);
       return;
     }
@@ -92,7 +92,7 @@ function ChoiceList<T>({
           {option.label}
         </Text>
       ))}
-      <Text dimColor>{footer ?? "↑/↓ to move · enter to select · esc to skip"}</Text>
+      <Text dimColor>{footer ?? "↑/↓ or j/k to move · enter to select · esc to skip"}</Text>
     </Box>
   );
 }
@@ -115,7 +115,7 @@ async function renderChoice<T>(
         footer={
           confirmKeys
             ? "y/n · enter to select · esc to skip"
-            : "↑/↓ to move · enter to select · esc to skip"
+            : "↑/↓ or j/k to move · enter to select · esc to skip"
         }
         onDone={resolve}
       />,

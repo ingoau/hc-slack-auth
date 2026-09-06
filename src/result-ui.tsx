@@ -212,11 +212,11 @@ function ResultApp({
 
     if (current.kind === "files") {
       const options = [...current.files, null];
-      if (key.upArrow) {
+      if (key.upArrow || input === "k") {
         setFileIndex((index) => (index + options.length - 1) % options.length);
         return;
       }
-      if (key.downArrow) {
+      if (key.downArrow || input === "j") {
         setFileIndex((index) => (index + 1) % options.length);
         return;
       }
@@ -240,7 +240,7 @@ function ResultApp({
     }
 
     if (current.kind === "confirm") {
-      if (key.upArrow || key.downArrow) {
+      if (key.upArrow || key.downArrow || input === "j" || input === "k") {
         setConfirmYes((value) => !value);
         return;
       }
@@ -260,12 +260,12 @@ function ResultApp({
       return;
     }
 
-    if (key.upArrow) {
+    if (key.upArrow || input === "k") {
       if (cardsRef.current.length === 0) return;
       setSelected((index) => (index + cardsRef.current.length - 1) % cardsRef.current.length);
       return;
     }
-    if (key.downArrow) {
+    if (key.downArrow || input === "j") {
       if (cardsRef.current.length === 0) return;
       setSelected((index) => (index + 1) % cardsRef.current.length);
       return;
@@ -323,7 +323,7 @@ function ResultApp({
             {option.label}
           </Text>
         ))}
-        <Text dimColor>↑/↓ to move · enter to select · esc to skip</Text>
+        <Text dimColor>↑/↓ or j/k to move · enter to select · esc to skip</Text>
       </Box>
     );
   }
@@ -355,7 +355,7 @@ function ResultApp({
     );
   }
 
-  const footer = `c copy · C copy all · e save · E save all · v ${revealed ? "hide" : "show"} · q quit`;
+  const footer = `j/k · c copy · C copy all · e save · E save all · v ${revealed ? "hide" : "show"} · q quit`;
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginY={1} gap={1}>

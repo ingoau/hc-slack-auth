@@ -21,7 +21,7 @@ Options:
   --timeout <seconds>   Request timeout (default: 90)
   -h, --help            Show this help
 
-During login, press l to expand logs. After login: ↑/↓ select, c copy, C copy all, e save, E save all, v show, q quit.
+During login, press l to expand logs. After login: ↑/↓ or j/k select, c copy, C copy all, e save, E save all, v show, q quit.
 `);
 }
 
