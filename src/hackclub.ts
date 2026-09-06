@@ -90,6 +90,21 @@ export async function hackclubLogin(session: HttpSession, args: CliArgs): Promis
   throw new Error(`login did not finish (ended at ${page.url})`);
 }
 
+export async function hackclubLogout(session: HttpSession): Promise<void> {
+  status("Signing out of Hack Club Auth…");
+  const home = await session.follow(await session.get(`${AUTH_ORIGIN}/`));
+  const csrf = extractCsrfToken(home.body);
+  await session.follow(
+    await session.post(
+      `${AUTH_ORIGIN}/logout`,
+      { authenticity_token: csrf, _method: "delete" },
+      home.url,
+    ),
+    home.url,
+  );
+  log("Signed out of Hack Club Auth");
+}
+
 async function completeFactors(
   session: HttpSession,
   start: Awaited<ReturnType<HttpSession["get"]>>,
