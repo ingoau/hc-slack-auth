@@ -140,27 +140,20 @@ export function isInteractiveUi(): boolean {
   return Boolean(process.stderr.isTTY && process.stdin.isTTY);
 }
 
-export async function runWithUi<T>(
-  fn: () => Promise<T>,
-  options: { done?: string } = {},
-): Promise<T> {
+export async function runWithUi<T>(fn: () => Promise<T>): Promise<T> {
   const ui = new UiController();
   const { startUi } = await import("./ui-app.js");
-  const instance = startUi(ui);
+  const { closeScreen } = await import("./screen.js");
+  startUi(ui);
 
   try {
-    const result = await uiStore.run(ui, fn);
-    ui.succeed(options.done ?? "Got Slack tokens");
-    await sleep(120);
-    return result;
+    return await uiStore.run(ui, fn);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     ui.fail(message);
     await sleep(80);
+    await closeScreen();
     throw error;
-  } finally {
-    instance.unmount();
-    await instance.waitUntilExit();
   }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type JSX } from "react";
-import { Box, Text, render, useInput, type Instance } from "ink";
+import { Box, Text, useInput, type Instance } from "ink";
+import { showScreen } from "./screen.js";
 import { EXPANDED_LOG_LINES, type UiController, type UiState } from "./ui.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
@@ -98,11 +99,5 @@ function App({ ui }: { ui: UiController }): JSX.Element {
 }
 
 export function startUi(ui: UiController): Instance {
-  return render(<App ui={ui} />, {
-    stdout: process.stderr,
-    stdin: process.stdin,
-    patchConsole: false,
-    alternateScreen: false,
-    exitOnCtrlC: true,
-  });
+  return showScreen(<App ui={ui} />);
 }

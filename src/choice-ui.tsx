@@ -1,6 +1,7 @@
-import { useState, type JSX } from "react";
-import { Box, Text, render, useInput } from "ink";
+import { useRef, useState, type JSX } from "react";
+import { Box, Text, useInput } from "ink";
 import { isInteractiveUi } from "./ui.js";
+import { afterInput, showScreen } from "./screen.js";
 
 export type Choice<T> = {
   label: string;
@@ -23,8 +24,16 @@ function ChoiceList<T>({
   onDone: (value: T | null) => void;
 }): JSX.Element {
   const [index, setIndex] = useState(0);
+  const done = useRef(false);
+
+  const finish = (value: T | null) => {
+    if (done.current) return;
+    done.current = true;
+    afterInput(() => onDone(value));
+  };
 
   useInput((input, key) => {
+    if (done.current) return;
     if (key.upArrow) {
       setIndex((current) => (current + options.length - 1) % options.length);
       return;
@@ -34,27 +43,27 @@ function ChoiceList<T>({
       return;
     }
     if (key.return) {
-      onDone(options[index]!.value);
+      finish(options[index]!.value);
       return;
     }
     if (confirmKeys) {
       if (input === "y" || input === "Y") {
         const yes = options.find((option) => option.value === true);
         if (yes) {
-          onDone(yes.value);
+          finish(yes.value);
           return;
         }
       }
       if (input === "n" || input === "N") {
         const no = options.find((option) => option.value === false);
         if (no) {
-          onDone(no.value);
+          finish(no.value);
           return;
         }
       }
     }
     if (key.escape || input === "q") {
-      onDone(null);
+      finish(null);
     }
   });
 
@@ -78,7 +87,7 @@ function ChoiceList<T>({
           })
         : null}
       {options.map((option, i) => (
-        <Text key={option.label} color={i === index ? "cyan" : undefined}>
+        <Text key={`${i}-${option.label}`} color={i === index ? "cyan" : undefined}>
           {i === index ? "❯ " : "  "}
           {option.label}
         </Text>
@@ -97,7 +106,7 @@ async function renderChoice<T>(
   if (!isInteractiveUi()) return null;
 
   return await new Promise((resolve) => {
-    const instance = render(
+    showScreen(
       <ChoiceList
         title={title}
         options={options}
@@ -108,18 +117,8 @@ async function renderChoice<T>(
             ? "y/n · enter to select · esc to skip"
             : "↑/↓ to move · enter to select · esc to skip"
         }
-        onDone={(value) => {
-          instance.unmount();
-          void instance.waitUntilExit().then(() => resolve(value));
-        }}
+        onDone={resolve}
       />,
-      {
-        stdout: process.stderr,
-        stdin: process.stdin,
-        patchConsole: false,
-        alternateScreen: false,
-        exitOnCtrlC: true,
-      },
     );
   });
 }

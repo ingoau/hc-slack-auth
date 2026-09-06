@@ -189,23 +189,57 @@ export function maskSecret(value: string): string {
   return `${head}…${value.slice(-4)}`;
 }
 
-export function formatCredentialsMasked(creds: SlackCredentials): string[] {
-  const lines = [`xoxd  ${creds.xoxd ? maskSecret(creds.xoxd) : "(not found)"}`];
-  if (creds.enterpriseId) lines.push(`org   ${creds.enterpriseId}`);
+export type IdentityInfo = {
+  userIds: string[];
+  enterpriseId: string | null;
+};
 
-  const shown = new Set<string>();
+export function identityInfo(creds: SlackCredentials): IdentityInfo {
+  const userIds: string[] = [];
+  for (const team of creds.teams) {
+    if (team.userId && !userIds.includes(team.userId)) userIds.push(team.userId);
+  }
+  return { userIds, enterpriseId: creds.enterpriseId };
+}
+
+export type TokenCard = {
+  id: string;
+  kind: "xoxd" | "xoxc";
+  role?: "enterprise" | "workspace";
+  title: string;
+  value: string;
+  details: Array<{ label: string; value: string }>;
+};
+
+export function tokenCards(creds: SlackCredentials): TokenCard[] {
+  const cards: TokenCard[] = [];
+  if (creds.xoxd) {
+    cards.push({
+      id: "xoxd",
+      kind: "xoxd",
+      title: "xoxd",
+      value: creds.xoxd,
+      details: [],
+    });
+  }
+
   const named = creds.teams.filter((team) => team.teamId !== "unknown");
-  if (named.length === 0) {
-    lines.push("xoxc  (not found)");
-    return lines;
+  const teams = named.length > 0 ? named : creds.teams;
+  for (const team of teams) {
+    const role =
+      team.teamId.startsWith("E") || team.teamId === creds.enterpriseId ? "enterprise" : "workspace";
+    const details: TokenCard["details"] = [];
+    if (team.name) details.push({ label: "name", value: team.name });
+    if (team.teamId && team.teamId !== "unknown") details.push({ label: "id", value: team.teamId });
+    if (team.url) details.push({ label: "url", value: team.url });
+    cards.push({
+      id: `xoxc-${team.teamId}-${team.token.slice(-8)}`,
+      kind: "xoxc",
+      role,
+      title: `xoxc · ${role}`,
+      value: team.token,
+      details,
+    });
   }
-  for (const team of named) {
-    if (shown.has(team.token)) continue;
-    shown.add(team.token);
-    const kind = team.teamId.startsWith("E") ? "enterprise" : "workspace";
-    const label = [kind, team.name, team.teamId].filter(Boolean).join(" · ");
-    lines.push(`xoxc  ${maskSecret(team.token)}  ${label}`);
-    if (team.userId) lines.push(`user  ${team.userId}`);
-  }
-  return lines;
+  return cards;
 }
