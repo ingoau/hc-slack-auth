@@ -12,12 +12,14 @@ function ChoiceList<T>({
   options,
   footer,
   extra,
+  confirmKeys = false,
   onDone,
 }: {
   title: string;
   options: Array<Choice<T>>;
   footer?: string;
   extra?: string;
+  confirmKeys?: boolean;
   onDone: (value: T | null) => void;
 }): JSX.Element {
   const [index, setIndex] = useState(0);
@@ -34,6 +36,22 @@ function ChoiceList<T>({
     if (key.return) {
       onDone(options[index]!.value);
       return;
+    }
+    if (confirmKeys) {
+      if (input === "y" || input === "Y") {
+        const yes = options.find((option) => option.value === true);
+        if (yes) {
+          onDone(yes.value);
+          return;
+        }
+      }
+      if (input === "n" || input === "N") {
+        const no = options.find((option) => option.value === false);
+        if (no) {
+          onDone(no.value);
+          return;
+        }
+      }
     }
     if (key.escape || input === "q") {
       onDone(null);
@@ -74,6 +92,7 @@ async function renderChoice<T>(
   title: string,
   options: Array<Choice<T>>,
   extra?: string,
+  confirmKeys = false,
 ): Promise<T | null> {
   if (!isInteractiveUi()) return null;
 
@@ -83,10 +102,16 @@ async function renderChoice<T>(
         title={title}
         options={options}
         extra={extra}
-          onDone={(value) => {
-            instance.unmount();
-            void instance.waitUntilExit().then(() => resolve(value));
-          }}
+        confirmKeys={confirmKeys}
+        footer={
+          confirmKeys
+            ? "y/n · enter to select · esc to skip"
+            : "↑/↓ to move · enter to select · esc to skip"
+        }
+        onDone={(value) => {
+          instance.unmount();
+          void instance.waitUntilExit().then(() => resolve(value));
+        }}
       />,
       {
         stdout: process.stderr,
@@ -115,6 +140,7 @@ export async function confirm(title: string, extra?: string): Promise<boolean> {
       { label: "No", value: false },
     ],
     extra,
+    true,
   );
   return value === true;
 }

@@ -31,10 +31,10 @@ function visibleLogs(state: UiState): string[] {
 function App({ ui }: { ui: UiController }): JSX.Element {
   const state = useSyncExternalStore(ui.subscribe, ui.getSnapshot, ui.getSnapshot);
   const logs = visibleLogs(state);
-  const showHint = state.phase === "working" || state.phase === "prompt";
+  const showHint = state.phase === "working";
 
   useInput((input, key) => {
-    if (key.ctrl && input === "e") {
+    if (input === "l" && !key.ctrl && !key.meta && ui.getSnapshot().phase !== "prompt") {
       ui.toggleExpanded();
       return;
     }
@@ -62,9 +62,19 @@ function App({ ui }: { ui: UiController }): JSX.Element {
       </Box>
 
       {state.phase === "prompt" ? (
-        <Box paddingLeft={2}>
-          <Text color="cyan">{state.promptValue}</Text>
-          <Text inverse> </Text>
+        <Box flexDirection="column" paddingLeft={2}>
+          {state.promptHint
+            ? state.promptHint.split("\n").map((line) => (
+                <Text key={line} dimColor>
+                  {line}
+                </Text>
+              ))
+            : null}
+          {state.promptError ? <Text color="red">{state.promptError}</Text> : null}
+          <Box>
+            <Text color="cyan">{state.promptValue}</Text>
+            <Text inverse> </Text>
+          </Box>
         </Box>
       ) : null}
 
@@ -79,7 +89,7 @@ function App({ ui }: { ui: UiController }): JSX.Element {
       {showHint ? (
         <Box paddingLeft={2}>
           <Text dimColor>
-            {state.expanded ? "ctrl+e collapse logs" : "ctrl+e expand logs"}
+            {state.expanded ? "l collapse logs" : "l expand logs"}
           </Text>
         </Box>
       ) : null}

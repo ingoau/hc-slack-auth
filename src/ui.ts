@@ -9,6 +9,8 @@ export type UiState = {
   phase: UiPhase;
   promptLabel: string;
   promptValue: string;
+  promptHint: string;
+  promptError: string;
 };
 
 const MAX_LOGS = 200;
@@ -25,6 +27,8 @@ export class UiController {
     phase: "working",
     promptLabel: "",
     promptValue: "",
+    promptHint: "",
+    promptError: "",
   };
   private readonly listeners = new Set<Listener>();
   private pendingPrompt: {
@@ -56,12 +60,14 @@ export class UiController {
     this.patch({ expanded: !this.state.expanded });
   }
 
-  prompt(label: string): Promise<string> {
+  prompt(label: string, options: { hint?: string; error?: string } = {}): Promise<string> {
     const promptLabel = label.replace(/:\s*$/, "").trim();
     this.patch({
       phase: "prompt",
       promptLabel,
       promptValue: "",
+      promptHint: options.hint ?? "",
+      promptError: options.error ?? "",
       status: promptLabel,
     });
     return new Promise((resolve, reject) => {
@@ -85,7 +91,13 @@ export class UiController {
     if (!value) return;
     const pending = this.pendingPrompt;
     this.pendingPrompt = null;
-    this.patch({ phase: "working", promptValue: "", promptLabel: "" });
+    this.patch({
+      phase: "working",
+      promptValue: "",
+      promptLabel: "",
+      promptHint: "",
+      promptError: "",
+    });
     pending?.resolve(value);
   }
 
@@ -132,10 +144,6 @@ export async function runWithUi<T>(
   fn: () => Promise<T>,
   options: { done?: string } = {},
 ): Promise<T> {
-  if (!isInteractiveUi()) {
-    return fn();
-  }
-
   const ui = new UiController();
   const { startUi } = await import("./ui-app.js");
   const instance = startUi(ui);

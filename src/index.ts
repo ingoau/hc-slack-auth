@@ -1,36 +1,53 @@
 #!/usr/bin/env node
 import { parseArgs, printUsage } from "./args.js";
-import { loginAndExtract, printCredentials } from "./flow.js";
-import { maybeWriteEnvFile } from "./save-env.js";
+import { loginAndExtract } from "./flow.js";
+import { prompt } from "./prompt.js";
+import { showResultPage } from "./result-ui.js";
 import { isInteractiveUi, runWithUi } from "./ui.js";
 
+async function askForEmail(): Promise<string> {
+  let previous: string | undefined;
+  for (;;) {
+    const email = await prompt("Hack Club email", {
+      hint: "The address you use at auth.hackclub.com",
+      error: previous ? "That doesn't look like an email" : undefined,
+    });
+    if (email.includes("@")) return email;
+    previous = email;
+  }
+}
+
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`error: ${message}`);
+    process.exitCode = 1;
+    return;
+  }
+
   if (args.help) {
     printUsage();
     return;
   }
-  if (!args.email) {
-    printUsage();
+
+  if (!isInteractiveUi()) {
+    console.error("hc-slack-auth is interactive-only. Run it in a terminal.");
     process.exitCode = 1;
     return;
   }
 
   try {
-    const creds = await runWithUi(() => loginAndExtract(args));
-    printCredentials(creds, args.json);
-    try {
-      await maybeWriteEnvFile(creds);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Could not update env file: ${message}`);
-      process.exitCode = 1;
-    }
+    const creds = await runWithUi(async () => {
+      if (!args.email) args.email = await askForEmail();
+      return loginAndExtract(args);
+    });
+    await showResultPage(creds);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!isInteractiveUi()) {
-      console.error(`error: ${message}`);
-    }
+    console.error(`error: ${message}`);
     process.exitCode = 1;
   }
 }

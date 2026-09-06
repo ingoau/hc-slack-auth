@@ -36,6 +36,12 @@ async function skipPasskey(session: HttpSession, pageUrl: string, html: string) 
   return session.follow(await session.post(skipUrl, { authenticity_token: csrf }, pageUrl), pageUrl);
 }
 
+function invalidCodeMessage(flash: string | null): string {
+  if (flash && /invalid|incorrect|wrong|expired/i.test(flash)) return flash;
+  if (flash) return flash;
+  return "Invalid code, try again";
+}
+
 export async function hackclubLogin(session: HttpSession, args: CliArgs): Promise<void> {
   const email = args.email!;
   let page = await loadLoginPage(session);
@@ -62,13 +68,19 @@ export async function hackclubLogin(session: HttpSession, args: CliArgs): Promis
     throw new Error(`no Hack Club Auth account exists for ${email}`);
   }
 
+  let skippedPasskey = false;
   if (pathOf(page.url).includes("/webauthn")) {
-    log("Passkey is enabled; falling back to an email code");
-    status("Skipping passkey, using email code…");
+    skippedPasskey = true;
+    log("Passkey is configured on this account; switching to email login");
+    status("Passkey is configured; switching to email login…");
     page = await skipPasskey(session, page.url, page.body);
   }
 
-  page = await completeFactors(session, page, args);
+  page = await completeFactors(session, page, {
+    email,
+    backupCode: args.backupCode,
+    skippedPasskey,
+  });
 
   if (pathOf(page.url) === "/" || pathOf(page.url) === "") {
     status("Signed into Hack Club Auth");
@@ -81,11 +93,13 @@ export async function hackclubLogin(session: HttpSession, args: CliArgs): Promis
 async function completeFactors(
   session: HttpSession,
   start: Awaited<ReturnType<HttpSession["get"]>>,
-  args: CliArgs,
+  ctx: { email: string; backupCode: string | null; skippedPasskey: boolean },
 ) {
   let page = start;
+  let lastEmailFailed = false;
+  let lastTotpFailed = false;
 
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const path = pathOf(page.url);
     const flash = extractFlashError(page.body);
     if (flash) log(flash);
@@ -94,19 +108,30 @@ async function completeFactors(
 
     if (path.includes("/totp")) {
       status("Waiting for TOTP code");
-      const code = digitsOnly(args.totp ?? (await prompt("TOTP code: ")));
+      const code = digitsOnly(
+        await prompt("TOTP code", {
+          hint: "Enter the code from your authenticator app",
+          error: flash || lastTotpFailed ? invalidCodeMessage(flash) : undefined,
+        }),
+      );
       const csrf = extractCsrfToken(page.body);
       status("Verifying TOTP…");
       page = await session.follow(
         await session.post(page.url, { authenticity_token: csrf, code, commit: "Verify →" }, page.url),
         page.url,
       );
+      lastTotpFailed = true;
       continue;
     }
 
     if (path.includes("/backup_code")) {
       status("Waiting for backup code");
-      const code = args.backupCode ?? (await prompt("Backup code: "));
+      const code =
+        ctx.backupCode ??
+        (await prompt("Backup code", {
+          error: flash ? invalidCodeMessage(flash) : undefined,
+        }));
+      ctx.backupCode = null;
       const csrf = extractCsrfToken(page.body);
       status("Verifying backup code…");
       page = await session.follow(
@@ -117,13 +142,27 @@ async function completeFactors(
     }
 
     if (path.includes("/webauthn")) {
+      ctx.skippedPasskey = true;
+      log("Passkey is configured on this account; switching to email login");
+      status("Passkey is configured; switching to email login…");
       page = await skipPasskey(session, page.url, page.body);
       continue;
     }
 
     if (/^\/login\/[^/]+(\/verify)?$/.test(path)) {
       status("Waiting for email login code");
-      const code = digitsOnly(args.code ?? (await prompt("Email login code: ")));
+      const hints = [
+        ctx.skippedPasskey
+          ? "This account has a passkey configured; using email login instead."
+          : null,
+        `A login code was sent to ${ctx.email}.`,
+      ].filter((line): line is string => Boolean(line));
+      const code = digitsOnly(
+        await prompt("Email login code", {
+          hint: hints.join("\n"),
+          error: flash || lastEmailFailed ? invalidCodeMessage(flash) : undefined,
+        }),
+      );
       const csrf = extractCsrfToken(page.body);
       const attemptUrl = page.url.replace(/\/verify\/?$/, "");
       const verifyUrl = `${attemptUrl.replace(/\/$/, "")}/verify`;
@@ -136,6 +175,7 @@ async function completeFactors(
         ),
         page.url,
       );
+      lastEmailFailed = true;
       continue;
     }
 

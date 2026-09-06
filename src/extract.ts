@@ -183,26 +183,29 @@ export function mergeCredentials(...parts: Array<Partial<SlackCredentials>>): Sl
   return { xoxd, xoxc: [...xoxc], teams, enterpriseId };
 }
 
-export function formatCredentials(creds: SlackCredentials, asJson: boolean): string {
-  if (asJson) return JSON.stringify(creds, null, 2);
+export function maskSecret(value: string): string {
+  if (value.length <= 10) return `${value.slice(0, 3)}…`;
+  const head = value.startsWith("xox") ? value.slice(0, 5) : value.slice(0, 4);
+  return `${head}…${value.slice(-4)}`;
+}
 
-  const lines = [
-    "Slack credentials",
-    "-----------------",
-    `xoxd: ${creds.xoxd ?? "(not found)"}`,
-  ];
+export function formatCredentialsMasked(creds: SlackCredentials): string[] {
+  const lines = [`xoxd  ${creds.xoxd ? maskSecret(creds.xoxd) : "(not found)"}`];
+  if (creds.enterpriseId) lines.push(`org   ${creds.enterpriseId}`);
 
-  if (creds.enterpriseId) lines.push(`enterprise: ${creds.enterpriseId}`);
-
-  if (creds.teams.length === 0) {
-    lines.push("xoxc: (not found)");
-  } else {
-    for (const team of creds.teams) {
-      const label = [team.name, team.teamId, team.url].filter(Boolean).join(" · ");
-      lines.push(`xoxc (${label}): ${team.token}`);
-      if (team.userId) lines.push(`  user: ${team.userId}`);
-    }
+  const shown = new Set<string>();
+  const named = creds.teams.filter((team) => team.teamId !== "unknown");
+  if (named.length === 0) {
+    lines.push("xoxc  (not found)");
+    return lines;
   }
-
-  return lines.join("\n");
+  for (const team of named) {
+    if (shown.has(team.token)) continue;
+    shown.add(team.token);
+    const kind = team.teamId.startsWith("E") ? "enterprise" : "workspace";
+    const label = [kind, team.name, team.teamId].filter(Boolean).join(" · ");
+    lines.push(`xoxc  ${maskSecret(team.token)}  ${label}`);
+    if (team.userId) lines.push(`user  ${team.userId}`);
+  }
+  return lines;
 }
