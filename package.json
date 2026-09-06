@@ -1,17 +1,32 @@
 {
   "name": "hc-slack-auth",
-  "version": "1.0.0",
-  "description": "CLI to sign into Hack Club Auth and print Slack xoxc/xoxd tokens",
+  "version": "0.1.0",
+  "description": "Sign into Hack Club Auth and get Slack xoxc/xoxd tokens",
   "type": "module",
   "bin": {
-    "hc-slack-auth": "./dist/index.js"
+    "hc-slack-auth": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingoau/hc-slack-auth.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ingoau/hc-slack-auth/issues"
+  },
+  "homepage": "https://github.com/ingoau/hc-slack-auth#readme",
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "hackclub",
