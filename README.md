@@ -7,6 +7,12 @@ A simple CLI to generate Slack tokens from your Hack Club account. Useful for gr
 It signs into [Hack Club Auth](https://auth.hackclub.com), completes 2FA in the terminal, SSO's into Hack Club Slack, then displays the `xoxc` / `xoxd` tokens.
 
 ```bash
+npx hc-slack-auth
+```
+
+Or from a clone:
+
+```bash
 git clone https://github.com/ingoau/hc-slack-auth.git
 cd hc-slack-auth
 npm install

@@ -1,6 +1,6 @@
 {
   "name": "hc-slack-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sign into Hack Club Auth and get Slack xoxc/xoxd tokens",
   "type": "module",
   "bin": {
