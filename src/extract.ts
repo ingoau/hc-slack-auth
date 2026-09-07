@@ -163,21 +163,6 @@ export function extractTokensFromText(text: string) {
   };
 }
 
-export function decodeSlackCookie(value: string): string {
-  let current = value;
-  for (let i = 0; i < 3; i++) {
-    if (!/%[0-9A-Fa-f]{2}/.test(current)) break;
-    try {
-      const next = decodeURIComponent(current);
-      if (next === current) break;
-      current = next;
-    } catch {
-      break;
-    }
-  }
-  return current;
-}
-
 export function mergeCredentials(...parts: Array<Partial<SlackCredentials>>): SlackCredentials {
   const xoxc = new Set<string>();
   const teams: SlackTeamToken[] = [];
@@ -185,7 +170,7 @@ export function mergeCredentials(...parts: Array<Partial<SlackCredentials>>): Sl
   let enterpriseId: string | null = null;
 
   for (const part of parts) {
-    if (part.xoxd) xoxd = decodeSlackCookie(part.xoxd);
+    if (part.xoxd) xoxd = part.xoxd;
     if (part.enterpriseId) enterpriseId ??= part.enterpriseId;
     for (const token of part.xoxc ?? []) xoxc.add(token);
     for (const team of part.teams ?? []) {
